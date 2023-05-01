@@ -24,7 +24,7 @@
 Begin by installing this package through Composer. Edit your project's `composer.json` file to require `laravelcollective/annotations`.
 
     "require": {
-        "laravelcollective/annotations": "6.0.\*"
+        "laravelcollective/annotations": "8.0.\*"
     }
 
 Next, update Composer from the Terminal:
@@ -62,6 +62,13 @@ class AnnotationsServiceProvider extends ServiceProvider {
     protected $scanModels = [];
 
     /**
+     * The namespace to scan for models in.
+     *
+     * @var string
+     */
+    protected $scanModelsInNamespace = null;
+
+    /**
      * Determines if we will auto-scan in the local environment.
      *
      * @var bool
@@ -84,6 +91,13 @@ class AnnotationsServiceProvider extends ServiceProvider {
      */
     protected $scanEverything = false;
 
+    /**
+     * Determines whether to use attributes for scanning.
+     *
+     * @var bool
+     */
+    protected $useAttribute = false;
+    
 }
 ```
 
@@ -141,6 +155,17 @@ Add models to the `protected $scanModels` array to scan for model annotations.
     ];
 ```
 
+Or scan your entire models namespace:
+
+```php
+    /**
+     * The namespace to scan for models in.
+     *
+     * @var string
+     */
+    protected $scanModelsInNamespace = 'App\Models';
+```
+
 Alternatively, you can set `protected $scanEverything` to `true` to automatically scan all classes within your application's namespace. *Note:* This may increase the time required to execute the scanners, depending on the size of your application.
 
 Scanning your event handlers, controllers, and models can be done manually by using `php artisan event:scan`, `php artisan route:scan`, or `php artisan model:scan` respectively. In the local environment, you can scan them automatically by setting `protected $scanWhenLocal = true`.
@@ -163,6 +188,24 @@ class MailHandler {
    * Send welcome email to User
    * @Hears("UserWasRegistered")
    */
+  public function sendWelcomeEmail(User $user)
+  {
+    // send welcome email to $user
+  }
+
+}
+```
+or if you prefer to use attributes, set `$useAttribute` to `true` and do this. Note that unlike annotations, a use statement is required for the attribute.
+
+```php
+<?php namespace App\Handlers\Events;
+
+use App\User;
+use Collective\Annotations\Events\Attributes\Attributes\Hears;
+
+class MailHandler {
+
+  #[Hears('UserWasRegistered')]
   public function sendWelcomeEmail(User $user)
   {
     // send welcome email to $user
@@ -203,6 +246,8 @@ You can also set up route names.
   /**
    * @Get("/", as="index")
    */
+
+   #[Get(path: '/', as: 'index')]
 ```
 
 ... or middlewares.
@@ -211,6 +256,8 @@ You can also set up route names.
   /**
    * @Get("/", middleware="guest")
    */
+
+   #[Get(path: '/', middleware: 'guest')]
 ```
 
 ... or both.
@@ -219,6 +266,8 @@ You can also set up route names.
   /**
    * @Get("/", as="index", middleware="guest")
    */
+
+   #[Get(path: '/', as: 'index', middleware: 'guest')]
 ```
 
 Here's an example that uses all of the available parameters for a `@Get` annotation:
@@ -227,6 +276,8 @@ Here's an example that uses all of the available parameters for a `@Get` annotat
   /**
    * @Get("/profiles/{id}", as="profiles.show", middleware="guest", domain="foo.com", where={"id": "[0-9]+"}, no_prefix="true")
    */
+
+   #[Get(path: '/profiles/{id}', as: 'profiles.show', middleware: 'guest', domain: 'foo.com', where: ['id' => '[0-9]+'], noPrefix: true)]
 ```
 `no_prefix` allows any prefix added to the routes in that controller be ignored for this particular route.
 
@@ -245,6 +296,13 @@ As well as defining middleware inline in the route definition tags (`@Get`, `@Po
    * @Get("login")
    * @Middleware("guest")
    */
+  public function login()
+  {
+    return view('index');
+  }
+
+  #[Get(path: 'login')]
+  #[Middleware(name: 'guest')]
   public function login()
   {
     return view('index');
@@ -275,6 +333,20 @@ class AuthController extends Controller {
   }
 
 }
+
+#[Middleware(name: 'guest', except: ['logout'], prefix: '/your/prefix')]
+class AuthController extends Controller {
+
+  #[Get(path: 'logout', as: 'logout')]
+  #[Middleware(name: 'auth')]
+  public function logout()
+  {
+    $this->auth->logout();
+
+    return redirect( route('login') );
+  }
+
+}
 ```
 
 ### @Resource
@@ -297,6 +369,8 @@ You can specify the `only` and `except` arguments, just like you can with the re
   /**
    * @Resource('users', only={"index", "show"})
    */
+
+   #[Resource('users', only: ['index', 'show'])]
 ```
 
 You can also specify the route names of each resource method.
@@ -305,6 +379,8 @@ You can also specify the route names of each resource method.
   /**
    * @Resource('users', names={"index"="user.all", "show"="user.view"})
    */
+
+   #[Resource('users', names: ['index' => 'user.all', 'show' => 'user.view'])]
 ```
 
 ### @Controller
@@ -316,6 +392,11 @@ Using the `@Controller` annotation on a controller allows you to set various opt
 /**
  * @Controller(prefix="admin", domain="foo.com")
  */
+class AdminController extends Controller {
+  // All routes will be prefixed by admin/
+}
+
+#[Controller(prefix: 'admin', domain: 'foo.com')]
 class AdminController extends Controller {
   // All routes will be prefixed by admin/
 }
@@ -385,21 +466,30 @@ You can use annotations to automatically bind your models to route parameters, u
 class User extends Eloquent {
   //
 }
+
+#[Bind('users')]
+class User extends Eloquent {
+  //
+}
 ```
 
 This is the equivalent of calling `Route::model('users', 'App\Users')`.
 
 <a name="custom-annotations"></a>
 ## Custom Annotations
+_Please Note: the namespaces have been updated in version 8.1 in order to allow PHP 8 attribute support._
 
-If you want to register your own annotations, create a namespace containing subclasses of `Collective\Annotations\Routing\Annotations\Annotations\Annotation` - let's say `App\Http\Annotations`.
+If you want to register your own annotations, create a namespace containing subclasses of `Collective\Annotations\Routing\Meta` - let's say `App\Http\Annotations`.\
+(_For version 8.0 and older, extend `Collective\Annotations\Routing\Annotations\Annotations\Annotation`_)
 
 Then, in your annotations service provider, override the `addRoutingAnnotations( RouteScanner $scanner )` method, and register your routing annotations namespace:
 
 ```php
 <?php namespace App\Providers;
 
-use Collective\Annotations\Routing\Annotations\Scanner as RouteScanner;
+use Collective\Annotations\Routing\Scanner as RouteScanner;
+# For version 8.0 and older use this instead of the above:
+# use Collective\Annotations\Routing\Annotations\Scanner as RouteScanner;
 
 /* ... then, in the class definition ... */
 
@@ -414,7 +504,7 @@ use Collective\Annotations\Routing\Annotations\Scanner as RouteScanner;
     }
 ```
 
-Your annotation classes must must have the `@Annotation` class annotation (see the following example).
+Your annotation classes must have the `@Annotation` class annotation (see the following example).
 
 There is an equivalent method for event annotations: `addEventAnnotations( EventScanner $scanner )`.
 
@@ -427,7 +517,9 @@ In a namespace - in this example, `App\Annotations`:
 ```php
 <?php namespace App\Http\Annotations;
 
-use Collective\Annotations\Routing\Annotations\Annotations\Annotation;
+use Collective\Annotations\Routing\Meta;
+# For version 8.0 and older use this instead of the above:
+# use Collective\Annotations\Routing\Annotations\Annotations\Annotation;
 use Collective\Annotations\Routing\Annotations\MethodEndpoint;
 use ReflectionMethod;
 

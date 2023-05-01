@@ -1,6 +1,7 @@
 <?php
 
 use Collective\Annotations\AnnotationsServiceProvider;
+use Illuminate\Container\Container;
 use PHPUnit\Framework\TestCase;
 use Mockery as m;
 
@@ -26,7 +27,11 @@ class AnnotationsServiceProviderTest extends TestCase
 
     public function testConvertNamespaceToPath()
     {
-        $this->provider = new AnnotationsServiceProviderAppNamespaceStub($this->app);
+        $this->app->shouldReceive('getNamespace')->once()
+            ->andReturn('App\\');
+        Container::setInstance($this->app);
+
+        $this->provider = new AnnotationsServiceProvider($this->app);
         $class = 'App\\Foo';
 
         $result = $this->provider->convertNamespaceToPath($class);
@@ -36,8 +41,11 @@ class AnnotationsServiceProviderTest extends TestCase
 
     public function testConvertNamespaceToPathWithoutRootNamespace()
     {
-        $this->provider = new AnnotationsServiceProviderAppNamespaceStub($this->app);
-        $this->provider->appNamespace = 'Foo';
+        $this->app->shouldReceive('getNamespace')->once()
+            ->andReturn('Foo\\');
+        Container::setInstance($this->app);
+
+        $this->provider = new AnnotationsServiceProvider($this->app);
         $class = 'App\\Foo';
 
         $result = $this->provider->convertNamespaceToPath($class);
@@ -47,8 +55,10 @@ class AnnotationsServiceProviderTest extends TestCase
 
     public function testGetClassesFromNamespace()
     {
-        $this->provider = new AnnotationsServiceProviderAppNamespaceStub($this->app);
-        $this->provider->appNamespace = 'App';
+        $this->app->shouldReceive('getNamespace')->once()
+            ->andReturn('App\\');
+        $this->provider = new AnnotationsServiceProvider($this->app);
+        Container::setInstance($this->app);
 
         $this->app->shouldReceive('make')
             ->with('Collective\Annotations\Filesystem\ClassFinder')->once()
@@ -61,15 +71,5 @@ class AnnotationsServiceProviderTest extends TestCase
         $results = $this->provider->getClassesFromNamespace('App\\Base', 'path/to/app');
 
         $this->assertEquals(['classes'], $results);
-    }
-}
-
-class AnnotationsServiceProviderAppNamespaceStub extends AnnotationsServiceProvider
-{
-    public $appNamespace = 'App';
-
-    public function getAppNamespace()
-    {
-        return $this->appNamespace;
     }
 }
